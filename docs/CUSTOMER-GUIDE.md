@@ -4,7 +4,7 @@ Handover doc for reviewers and integration operators.
 
 **Repository:** https://github.com/StanDigis/rehabalpha-pcc-sync
 
-**Architecture diagram (GitHub Pages):** https://standigis.github.io/rehabalpha-pcc-sync/
+**Architecture diagram (GitHub Pages):** https://standigis.github.io/rehabalpha-pcc-sync/site/
 
 ## Prerequisites
 

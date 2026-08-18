@@ -3,7 +3,7 @@
 Reference implementation: sync patient demographics, admissions, and coverage from **PointClickCare (PCC)** into **RehabAlpha** for contract therapy organisations.
 
 **Handover:** [docs/CUSTOMER-GUIDE.md](docs/CUSTOMER-GUIDE.md)  
-**Architecture diagram:** https://standigis.github.io/rehabalpha-pcc-sync/
+**Architecture diagram:** https://standigis.github.io/rehabalpha-pcc-sync/site/
 
 ## Quick start
 
