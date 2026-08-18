@@ -8,11 +8,12 @@
     "build": "next build",
     "start": "next start --port 3100",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test:e2e": "node ../../scripts/with-emulators.mjs playwright test",
+    "test:e2e": "node ../../scripts/with-emulators.mjs node ../../scripts/run-e2e.mjs",
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@rehabalpha/core": "*",
+    "@rehabalpha/pcc-client": "*",
     "@rehabalpha/sync": "*",
     "firebase": "^12.17.1",
     "firebase-admin": "^14.2.0",
