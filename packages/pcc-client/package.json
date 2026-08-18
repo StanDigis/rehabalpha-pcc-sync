@@ -1,0 +1,30 @@
+{
+  "name": "@rehabalpha/pcc-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PointClickCare API client: OAuth, pagination, throttling, retries, and recorded fixtures.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@rehabalpha/core": "*",
+    "zod": "^4.4.3"
+  }
+}
