@@ -7,9 +7,13 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
   },
   "dependencies": {
+    "@google-cloud/secret-manager": "^6.1.1",
     "@google-cloud/tasks": "^7.0.0",
     "@rehabalpha/core": "*",
     "@rehabalpha/pcc-client": "*",
