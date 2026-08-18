@@ -1,0 +1,49 @@
+{
+  "name": "rehabalpha-pcc-sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PointClickCare to RehabAlpha synchronization: architecture and reference implementation",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "postinstall": "npm run build:packages",
+    "build:packages": "npm run build --workspace @rehabalpha/core && npm run build --workspace @rehabalpha/pcc-client && npm run build --workspace @rehabalpha/sync",
+    "build": "npm run build:packages && npm run build --workspace @rehabalpha/functions && npm run build --workspace @rehabalpha/web",
+    "typecheck": "npm run build:packages && tsc --noEmit -p tsconfig.typecheck.json && npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run --project core --project pcc-client --project sync-unit --project web-unit",
+    "test:watch": "vitest --project core --project pcc-client --project sync-unit --project web-unit",
+    "test:emulator": "node scripts/with-emulators.mjs vitest run --project sync-emulator --project functions --project rules",
+    "test:all": "npm run test && npm run test:emulator",
+    "test:e2e": "npm run --workspace @rehabalpha/web test:e2e",
+    "coverage": "vitest run --coverage --project core --project pcc-client --project sync-unit",
+    "emulators": "node scripts/emulators.mjs",
+    "dev:web": "npm run dev --workspace @rehabalpha/web",
+    "seed": "node scripts/with-emulators.mjs npm run seed:run",
+    "seed:run": "tsx scripts/seed.ts",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:all"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "@types/node": "^24.10.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^9.39.1",
+    "firebase-tools": "^15.27.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.next/
+playwright-report/
+test-results/
+package-lock.json
+docs/site/vendor/
