@@ -9,9 +9,15 @@ export const AUTH_EMULATOR_HOST = '127.0.0.1:9099';
  * npm scripts, the seed script and CI from drifting apart.
  */
 export function emulatorEnv() {
+  const javaHome = resolveJavaHome();
+
   return {
     ...process.env,
-    JAVA_HOME: resolveJavaHome(),
+    JAVA_HOME: javaHome,
+    // firebase-tools runs `java` from PATH and does not consult JAVA_HOME, so setting only
+    // JAVA_HOME leaves a version manager's older JDK in front and the emulator refuses to start
+    // with a message that points at the JDK rather than at the PATH.
+    PATH: `${javaHome}/bin:${process.env.PATH ?? ''}`,
     GCLOUD_PROJECT: EMULATOR_PROJECT_ID,
     GOOGLE_CLOUD_PROJECT: EMULATOR_PROJECT_ID,
     FIREBASE_PROJECT_ID: EMULATOR_PROJECT_ID,

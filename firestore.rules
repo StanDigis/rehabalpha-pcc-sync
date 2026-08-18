@@ -1,0 +1,235 @@
+rules_version = '2';
+
+// Deny by default, and read-only throughout.
+//
+// Two structural decisions shape this file.
+//
+// First, no client writes anything. Every document in this database is either a projection of
+// PointClickCare state or a record produced by the integration, and both are written by the
+// Admin SDK, which bypasses these rules entirely. So `allow write: if false` is not laziness —
+// it is the accurate statement of the data flow, and it means a compromised client token cannot
+// alter a chart even if it can read one. Operator actions that do mutate state (replaying a dead
+// letter, deciding an identity match) go through authenticated server endpoints where the
+// decision is audited, not through a direct document write.
+//
+// Second, the tenant is checked on the document, not inferred from the path. Collections are
+// flat with a denormalised `therapyOrgId`, so the field a query filters on is the field these
+// rules compare — one line, visible in both places. Under a nested layout the console's
+// cross-facility queries would need collection-group queries, which cannot be constrained to one
+// tenant by their path, and tenant isolation would rest on a `where` clause a future caller can
+// forget.
+//
+// The role-to-permission mapping below deliberately restates a subset of
+// `ROLE_PERMISSIONS` in packages/core/src/domain/authorization.ts. Two languages, one meaning:
+// the suite in tests/rules asserts they agree, because a silent divergence here is a
+// confidentiality bug rather than a broken feature.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function claims() {
+      return request.auth.token;
+    }
+
+    function grantPath() {
+      return /databases/$(database)/documents/userGrants/$(request.auth.uid);
+    }
+
+    function grant() {
+      return get(grantPath()).data;
+    }
+
+    // Signed in, with a grant document that exists, is active, and matches the token.
+    //
+    // The `grantVersion` comparison is what makes revocation prompt. A Firebase ID token keeps
+    // its custom claims for up to an hour, so without this an access removal would not take
+    // effect until the token expired. Bumping the version on the grant invalidates every token
+    // minted against the old one immediately.
+    function signedIn() {
+      return request.auth != null
+        && claims().therapyOrgId is string
+        && exists(grantPath())
+        && grant().status == 'active'
+        && grant().grantVersion == claims().grantVersion;
+    }
+
+    function tenant() {
+      return claims().therapyOrgId;
+    }
+
+    function roles() {
+      return claims().roles;
+    }
+
+    function sameTenant(resourceData) {
+      return resourceData.therapyOrgId == tenant();
+    }
+
+    // Roles whose remit is the whole tenant rather than a list of facilities. Everyone else is
+    // confined to the facilities named in their grant, and an empty list means no access — never
+    // "all facilities", which is the default a hurried implementation lands on.
+    function tenantWide() {
+      return roles().hasAny(['orgAdmin', 'auditor']);
+    }
+
+    function inFacilityScope(facilityId) {
+      return tenantWide() || grant().facilityIds.hasAny([facilityId]);
+    }
+
+    // A record scoped to one facility: right tenant, and that facility in scope.
+    function scopedTo(resourceData) {
+      return signedIn()
+        && sameTenant(resourceData)
+        && inFacilityScope(resourceData.facilityId);
+    }
+
+    // A tenant-level record with no facility of its own.
+    function inTenant() {
+      return signedIn() && sameTenant(resource.data);
+    }
+
+    function canReadPatient() {
+      return roles().hasAny(['orgAdmin', 'facilityManager', 'therapist', 'biller', 'auditor']);
+    }
+
+    function canReadSyncHealth() {
+      return roles().hasAny(['orgAdmin', 'facilityManager', 'integrationOperator']);
+    }
+
+    function canReadDeadLetters() {
+      return roles().hasAny(['orgAdmin', 'integrationOperator']);
+    }
+
+    function canReadIdentityReview() {
+      return roles().hasAny(['orgAdmin', 'facilityManager', 'integrationOperator']);
+    }
+
+    function canReadAuditLog() {
+      return roles().hasAny(['orgAdmin', 'auditor']);
+    }
+
+    // ---- Tenant and facility configuration -------------------------------------------------
+
+    match /therapyOrgs/{orgId} {
+      allow read: if signedIn() && orgId == tenant();
+      allow write: if false;
+    }
+
+    match /facilities/{facilityId} {
+      allow read: if signedIn() && sameTenant(resource.data) && inFacilityScope(facilityId);
+      allow write: if false;
+    }
+
+    match /facilityContracts/{contractId} {
+      allow read: if signedIn()
+        && sameTenant(resource.data)
+        && roles().hasAny(['orgAdmin', 'facilityManager', 'auditor', 'biller']);
+      allow write: if false;
+    }
+
+    // Never readable by a client, at any role.
+    //
+    // The document holds Secret Manager references and OAuth state. An operator managing a
+    // connection does so through a server endpoint that returns only what the screen needs —
+    // status, last successful token refresh — and never the credential material itself. There is
+    // no client use for this document that justifies putting it within reach of a stolen token.
+    match /pccConnections/{connectionId} {
+      allow read, write: if false;
+    }
+
+    // ---- Patient data ----------------------------------------------------------------------
+
+    // Cross-facility identity record, so it has no single facility to scope by.
+    //
+    // Access is the union of the person's facilities, evaluated against the caller's scope. This
+    // is what lets a therapist at Lakeside see that a resident was previously treated at
+    // Ferncrest — the point of having a person record — without letting them enumerate residents
+    // at facilities they have no relationship with.
+    match /persons/{personId} {
+      allow read: if signedIn()
+        && sameTenant(resource.data)
+        && canReadPatient()
+        && (tenantWide() || grant().facilityIds.hasAny(resource.data.facilityIds));
+      allow write: if false;
+    }
+
+    match /patients/{patientId} {
+      allow read: if scopedTo(resource.data) && canReadPatient();
+      allow write: if false;
+    }
+
+    match /admissions/{admissionId} {
+      allow read: if scopedTo(resource.data) && canReadPatient();
+      allow write: if false;
+    }
+
+    match /coverages/{coverageId} {
+      allow read: if scopedTo(resource.data) && canReadPatient();
+      allow write: if false;
+    }
+
+    // The review queue holds demographics for two candidate people side by side, which is
+    // precisely the comparison a reviewer needs and precisely what makes it sensitive. Deciding a
+    // match happens through a server endpoint: the decision has to be audited with the reviewer's
+    // identity, and a document write cannot be made to carry that reliably.
+    match /personMatchCandidates/{candidateId} {
+      allow read: if scopedTo(resource.data) && canReadIdentityReview();
+      allow write: if false;
+    }
+
+    // ---- Integration operations ------------------------------------------------------------
+
+    // Note what an integrationOperator can and cannot see across these collections: enough to
+    // tell that a patient failed to sync and to replay the event, and not enough to read the
+    // chart. Repairing a pipeline should not require access to a clinical record.
+    match /syncEvents/{eventId} {
+      allow read: if inTenant() && canReadSyncHealth();
+      allow write: if false;
+    }
+
+    match /syncCursors/{cursorId} {
+      allow read: if inTenant() && canReadSyncHealth();
+      allow write: if false;
+    }
+
+    match /syncDeadLetters/{deadLetterId} {
+      allow read: if inTenant() && canReadDeadLetters();
+      allow write: if false;
+    }
+
+    match /reconciliationRuns/{runId} {
+      allow read: if inTenant() && canReadSyncHealth();
+      allow write: if false;
+    }
+
+    match /driftRecords/{driftId} {
+      allow read: if inTenant() && canReadSyncHealth();
+      allow write: if false;
+    }
+
+    // ---- Audit and grants ------------------------------------------------------------------
+
+    // Append-only, and not appendable from here. HIPAA's audit-control requirement is worth very
+    // little if the audited party can write to the log, so the only writer is the Admin SDK and
+    // the only readers are the roles whose job is oversight.
+    match /auditEvents/{eventId} {
+      allow read: if inTenant() && canReadAuditLog();
+      allow write: if false;
+    }
+
+    // A user may always read their own grant: the console needs it to decide what to render, and
+    // it is their own authorisation rather than anyone else's. Reading other people's grants is
+    // an administrative act.
+    match /userGrants/{uid} {
+      allow read: if request.auth != null
+        && (uid == request.auth.uid
+            || (signedIn() && sameTenant(resource.data) && roles().hasAny(['orgAdmin', 'auditor'])));
+      allow write: if false;
+    }
+
+    // Anything not named above is denied, including collections added later. A new collection
+    // that needs client access has to be granted it deliberately, which is the point.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

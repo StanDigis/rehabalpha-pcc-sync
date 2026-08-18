@@ -1,0 +1,33 @@
+{
+  "name": "@rehabalpha/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Integration operations console: sync health, dead letters, identity review, coverage timeline.",
+  "scripts": {
+    "dev": "next dev --port 3100",
+    "build": "next build",
+    "start": "next start --port 3100",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:e2e": "node ../../scripts/with-emulators.mjs playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "dependencies": {
+    "@rehabalpha/core": "*",
+    "@rehabalpha/sync": "*",
+    "firebase": "^12.17.1",
+    "firebase-admin": "^14.2.0",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "jsdom": "^30.0.1",
+    "tailwindcss": "^4.3.3"
+  }
+}

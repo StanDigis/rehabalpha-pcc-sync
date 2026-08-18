@@ -1,0 +1,265 @@
+{
+  "//": [
+    "Every composite index here backs a query that exists in the code, and no query in the code",
+    "lacks one. Firestore fails a query with a missing composite index at runtime rather than at",
+    "deploy time, so an unindexed query is a production error that no test catches unless the test",
+    "runs the query — which is why the emulator suites exercise the real read paths.",
+    "",
+    "Two notes on what is deliberately absent. There is no index supporting a range on both",
+    "effectiveFrom and effectiveTo for coverage: Firestore allows one range field per index, so the",
+    "contract and coverage date filters run in memory over a small, narrowly-queried result set.",
+    "And several fields indexed below are identifying — demographics.lastName, birthDate — which is",
+    "unavoidable for record matching and is called out in DATA-MODEL.md rather than left as a",
+    "surprise to whoever reads this file next.",
+    "",
+    "Single-field indexes are automatic and are not listed."
+  ],
+  "indexes": [
+    {
+      "//": "Resolving a PCC organisation and facility pair to this tenant's facility record, on every webhook.",
+      "collectionGroup": "facilities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "pcc.orgUuid", "order": "ASCENDING" },
+        { "fieldPath": "pcc.facId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Contracts for one facility. The date range is applied in memory; see the note above.",
+      "collectionGroup": "facilityContracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "facilityId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Census comparison during reconciliation, and the facility caseload screen.",
+      "collectionGroup": "patients",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "facilityId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Which facilities a person has been seen at, used as an identity-matching signal.",
+      "collectionGroup": "patients",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "personId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Patients awaiting identity review, listed for the console queue.",
+      "collectionGroup": "patients",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "facilityId", "order": "ASCENDING" },
+        { "fieldPath": "personId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Identity match candidates by surname. Selective enough to cap, unlike a scan.",
+      "collectionGroup": "persons",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "demographics.lastName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Identity match candidates by date of birth, the strongest available signal.",
+      "collectionGroup": "persons",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "demographics.birthDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "A patient's stay history, newest first.",
+      "collectionGroup": "admissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "admitDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Active stays at a facility: the caseload query.",
+      "collectionGroup": "admissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "facilityId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "admitDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Coverage for one patient, and — with an `in` clause on patientId — for a whole caseload in chunks of thirty.",
+      "collectionGroup": "coverages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "effectiveFrom", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Coverage in force at a facility, for billing review.",
+      "collectionGroup": "coverages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "facilityId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "effectiveFrom", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "The identity review queue, highest-scoring candidate first.",
+      "collectionGroup": "personMatchCandidates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "score", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Recent webhook deliveries, for the ingest-to-applied latency view.",
+      "collectionGroup": "syncEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "receivedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Deliveries filtered by outcome: what is still queued, what was dead-lettered.",
+      "collectionGroup": "syncEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "receivedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Open dead letters, oldest failure first: the operator's work queue.",
+      "collectionGroup": "syncDeadLetters",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "failure.lastFailedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Dead letters grouped by what failed, so a systemic problem is visible as one row.",
+      "collectionGroup": "syncDeadLetters",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "entityType", "order": "ASCENDING" },
+        { "fieldPath": "failure.lastFailedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Per-facility sync health, which is the question an operator actually asks.",
+      "collectionGroup": "syncCursors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Reconciliation history for one facility.",
+      "collectionGroup": "reconciliationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "facilityId", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Open drift, newest first.",
+      "collectionGroup": "driftRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "detectedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Drift for one facility, which is how a single failing integration is isolated.",
+      "collectionGroup": "driftRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "facilityId", "order": "ASCENDING" },
+        { "fieldPath": "detectedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "The audit trail for one document: 'why does Betty's payer say Medicaid'.",
+      "collectionGroup": "auditEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "target.id", "order": "ASCENDING" },
+        { "fieldPath": "at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Everything one actor did, which is the access-review question.",
+      "collectionGroup": "auditEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "actor.uid", "order": "ASCENDING" },
+        { "fieldPath": "at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Tenant-wide audit stream, newest first.",
+      "collectionGroup": "auditEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Users in a tenant, for grant administration.",
+      "collectionGroup": "userGrants",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapyOrgId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "//": [
+        "Webhook envelopes expire ninety days after receipt via a TTL policy on expiresAt: long",
+        "enough to investigate a delivery problem, short enough that PCC identifiers are not kept",
+        "indefinitely. The TTL policy itself is configured on the database rather than here; the",
+        "single-field index is disabled because nothing queries or orders by this field."
+      ],
+      "collectionGroup": "syncEvents",
+      "fieldPath": "expiresAt",
+      "indexes": []
+    }
+  ]
+}

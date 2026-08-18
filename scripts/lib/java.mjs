@@ -1,7 +1,17 @@
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 const MINIMUM_MAJOR = 21;
+
+/**
+ * Both `java -version` and `/usr/libexec/java_home -V` write to stderr and exit zero, which is why
+ * this uses `spawnSync` and reads both streams. Reading only stdout returns an empty string, and the
+ * version parse then silently yields 0 — a JDK 22 install reported as "no JDK found".
+ */
+function runCapturingBothStreams(command, args) {
+  const result = spawnSync(command, args, { encoding: 'utf8' });
+  return `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+}
 
 function majorOf(versionString) {
   const match = /(\d+)/.exec(versionString);
@@ -12,39 +22,22 @@ function majorOfJavaHome(javaHome) {
   const binary = `${javaHome}/bin/java`;
   if (!existsSync(binary)) return 0;
 
-  try {
-    // `java -version` writes to stderr on every JDK, hence the stdio redirect.
-    const output = execFileSync(binary, ['-version'], { stdio: ['ignore', 'pipe', 'pipe'] });
-    return majorOf(String(output));
-  } catch (error) {
-    if (error && typeof error === 'object' && 'stderr' in error) {
-      return majorOf(String(error.stderr));
-    }
-    return 0;
-  }
+  return majorOf(runCapturingBothStreams(binary, ['-version']));
 }
 
 function candidatesFromJavaHomeTool() {
   if (process.platform !== 'darwin') return [];
 
-  try {
-    const output = execFileSync('/usr/libexec/java_home', ['-V'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    return parseJavaHomeOutput(String(output));
-  } catch (error) {
-    if (error && typeof error === 'object' && 'stderr' in error) {
-      return parseJavaHomeOutput(String(error.stderr));
-    }
-    return [];
-  }
+  if (!existsSync('/usr/libexec/java_home')) return [];
+  return parseJavaHomeOutput(runCapturingBothStreams('/usr/libexec/java_home', ['-V']));
 }
 
+/** Pulls the install paths out of `java_home -V`, which lists one JDK per line. */
 function parseJavaHomeOutput(text) {
   return text
     .split('\n')
-    .map((line) => /"\s*(\/.*?)\s*$/.exec(line)?.[1])
-    .filter((path) => typeof path === 'string' && path.length > 0);
+    .map((line) => /\s(\/\S.*?)\s*$/.exec(line)?.[1])
+    .filter((path) => typeof path === 'string' && path.startsWith('/'));
 }
 
 /**
@@ -60,6 +53,7 @@ export function resolveJavaHome() {
   const candidates = [
     ...candidatesFromJavaHomeTool(),
     '/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home',
+    '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
     '/usr/lib/jvm/default-java',
   ];
 
