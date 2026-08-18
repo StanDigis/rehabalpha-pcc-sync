@@ -71,6 +71,36 @@ function isPhiKey(key: string): boolean {
 }
 
 /**
+ * `key=value` and `key: value` pairs embedded in a sentence.
+ *
+ * Deliberately narrow: it matches an identifier-shaped key, an optional quoted or bare value, and
+ * nothing else. A looser pattern applied to error text produces false positives on ordinary prose
+ * and makes the result unreadable, which is its own kind of failure — an operator who cannot read
+ * the message will go and find the unredacted original.
+ */
+const KEYED_VALUE = /\b([A-Za-z_][A-Za-z0-9_.]*)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;)\]}]+)/g;
+
+/**
+ * Scrubs identifying values out of free text.
+ *
+ * Key-based redaction cannot help here: an upstream error message is one string, and the key whose
+ * value must not be kept is inside it. Upstream services do echo request data back in rejection
+ * messages, and the dead-letter queue is a collection operators browse freely, so the text is
+ * scrubbed before it is stored rather than trusted to be clean.
+ *
+ * This is a mitigation, not a guarantee. Nothing can find an identifier in prose that names no
+ * field, which is why the codebase never puts an upstream response body anywhere near a log or a
+ * stored record — the transport logs the route template only.
+ */
+export function redactFreeText(text: string, maxLength = 500): string {
+  const scrubbed = text.replace(KEYED_VALUE, (match, key: string, separator: string) =>
+    isPhiKey(key) ? `${key}${separator}${REDACTED}` : match,
+  );
+
+  return scrubbed.length > maxLength ? `${scrubbed.slice(0, maxLength)}…` : scrubbed;
+}
+
+/**
  * Correlating log lines about the same patient without writing the identifier down.
  * Truncated to 12 hex characters: enough to correlate within a tenant, short enough that
  * it is useless as a lookup key if the logs leak.
@@ -90,7 +120,14 @@ export function redact(input: unknown, depth = 0): unknown {
   if (input instanceof Date) return input.toISOString();
 
   if (input instanceof Error) {
-    return { name: input.name, message: input.message, stack: input.stack };
+    // `name` here is the error class, not a person's name, so the key-based rule would blank exactly
+    // the field that identifies the failure. The message and stack go through the text scrubber
+    // because an upstream error can carry request data in either.
+    return {
+      name: input.name,
+      message: redactFreeText(input.message),
+      stack: input.stack === undefined ? undefined : redactFreeText(input.stack, 4000),
+    };
   }
 
   if (Array.isArray(input)) {

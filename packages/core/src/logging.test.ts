@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLogger, createMemorySink, pseudonymise, redact } from './logging.js';
+import { createLogger, createMemorySink, pseudonymise, redact, redactFreeText } from './logging.js';
 
 describe('redact', () => {
   it('blanks a direct identifier', () => {
@@ -95,6 +95,20 @@ describe('redact', () => {
     expect(result.message).toBe('boom');
   });
 
+  /**
+   * `name` on an error is the class, not a person. The key-based rule would blank exactly the field
+   * that identifies the failure, so the error branch is exempt from it and scrubs the text instead.
+   */
+  it('scrubs identifying values out of an error message without blanking the class', () => {
+    const result = redact(new TypeError('rejected lastName=Abernathy')) as {
+      name: string;
+      message: string;
+    };
+
+    expect(result.name).toBe('TypeError');
+    expect(result.message).toBe('rejected lastName=[redacted]');
+  });
+
   it('passes through primitives and nullish values unchanged', () => {
     expect(redact('plain')).toBe('plain');
     expect(redact(42)).toBe(42);
@@ -104,6 +118,51 @@ describe('redact', () => {
 
   it('refuses to serialise a function rather than emitting something misleading', () => {
     expect(redact({ handler: () => undefined })).toEqual({ handler: '[unloggable:function]' });
+  });
+});
+
+/**
+ * The regression this exists for: the dead-letter writer passed an upstream error message through
+ * key-based redaction, which cannot see inside a string and so did nothing at all. The call looked
+ * correct and the queue operators browse held whatever the upstream chose to echo back.
+ */
+describe('redactFreeText', () => {
+  it('blanks an identifying value named in the text', () => {
+    expect(redactFreeText('Rejected payload for lastName=Abernathy')).toBe(
+      'Rejected payload for lastName=[redacted]',
+    );
+  });
+
+  it('handles the colon form and quoted values', () => {
+    expect(redactFreeText('invalid birthDate: "1948-09-11" in row 3')).toBe(
+      'invalid birthDate: [redacted] in row 3',
+    );
+  });
+
+  it('blanks several values in one message', () => {
+    expect(redactFreeText('conflict on firstName=Betty and mrn=FC-100244')).toBe(
+      'conflict on firstName=[redacted] and mrn=[redacted]',
+    );
+  });
+
+  /**
+   * An operator who cannot read the message will go and find the unredacted original, so the
+   * scrubber has to leave the diagnostic parts alone.
+   */
+  it('leaves non-identifying keys and ordinary prose intact', () => {
+    expect(redactFreeText('status=429 retryAfter=30s while reading patientId=1001')).toBe(
+      'status=429 retryAfter=30s while reading patientId=1001',
+    );
+    expect(redactFreeText('Service temporarily unavailable')).toBe(
+      'Service temporarily unavailable',
+    );
+  });
+
+  it('caps the length so one failure cannot store an upstream response body', () => {
+    const result = redactFreeText('x'.repeat(2000));
+
+    expect(result).toHaveLength(501);
+    expect(result.endsWith('…')).toBe(true);
   });
 });
 
