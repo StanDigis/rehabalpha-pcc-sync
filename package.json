@@ -28,8 +28,10 @@
     "coverage": "vitest run --coverage --project core --project pcc-client --project sync-unit",
     "emulators": "node scripts/emulators.mjs",
     "dev:web": "npm run dev --workspace @rehabalpha/web",
+    "dev:local": "node scripts/run-with-env.mjs npm run dev:web",
     "seed": "node scripts/with-emulators.mjs npm run seed:run",
     "seed:run": "tsx scripts/seed.ts",
+    "seed:local": "node scripts/run-with-env.mjs npm run seed:run",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:all"
   },
   "devDependencies": {

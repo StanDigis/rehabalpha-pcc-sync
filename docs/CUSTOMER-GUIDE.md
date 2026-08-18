@@ -2,7 +2,9 @@
 
 Handover doc for reviewers and integration operators.
 
-**Repository:** [StanDigis/rehabalpha-pcc-sync](https://github.com/StanDigis/rehabalpha-pcc-sync)
+**Repository:** https://github.com/StanDigis/rehabalpha-pcc-sync
+
+**Architecture diagram (GitHub Pages):** https://standigis.github.io/rehabalpha-pcc-sync/
 
 ## Prerequisites
 
@@ -12,23 +14,18 @@ Handover doc for reviewers and integration operators.
 
 ## Local setup
 
-**Terminal 1:**
+**Terminal 1 — start emulators (leave running):**
 
 ```bash
+npm install
 npm run emulators
 ```
 
-**Terminal 2:**
+**Terminal 2 — seed demo data and run the ops console:**
 
 ```bash
-export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
-export FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
-export GCLOUD_PROJECT=rehabalpha-pcc-sync-demo
-export NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true
-export OPS_CONSOLE_DEV_BYPASS=1
-
-npm run seed:run
-npm run dev:web
+npm run seed:local
+npm run dev:local
 ```
 
 Open http://localhost:3100
@@ -37,6 +34,8 @@ Open http://localhost:3100
 | -------- | -------------------- |
 | Email    | `ops@healthpro.demo` |
 | Password | `demo-password`      |
+
+> One-shot alternative (starts emulators, seeds, exits): `npm run seed` — useful in CI.
 
 ## Ops console
 
@@ -48,45 +47,40 @@ Open http://localhost:3100
 | Identity     | `/identity-review`              | Pending person-match candidates               |
 | Coverage     | `/patients/demo-betty/coverage` | Sanitized payer timeline (demo)               |
 
-Operator procedures and failure codes: [OPERATIONS.md](./OPERATIONS.md)
-
-### Seed demo scenarios
-
-- **Dead letter:** Betty · `pcc_forbidden` — replay after reading failure message
-- **Identity:** ~78% match with signal breakdown
-- **Coverage:** Medicare → Medicaid rows for Betty
+Operator runbooks: [OPERATIONS.md](./OPERATIONS.md)
 
 ## Verification
 
-With emulators running:
-
 ```bash
 npm run verify
+npm run test:e2e
 ```
 
-Expected: all tests pass (225 unit, 101 emulator integration, 1 Playwright E2E).
+Expected: 225 unit tests, 101 emulator integration tests, 1 Playwright E2E — all pass.
 
-## Documentation map
+CI runs the same checks on every push to `main`.
 
-| Doc                                       | Use when…                              |
-| ----------------------------------------- | -------------------------------------- |
-| [ARCHITECTURE.md](./ARCHITECTURE.md)      | Understanding components and data flow |
-| [DATA-MODEL.md](./DATA-MODEL.md)          | Firestore collections and indexes      |
-| [SECURITY.md](./SECURITY.md)              | Auth model and Firestore rules         |
-| [OPERATIONS.md](./OPERATIONS.md)          | Runbooks and on-call                   |
-| [QUESTIONS.md](./QUESTIONS.md)            | Known open items                       |
-| [ADR.md](./ADR.md)                        | Decision rationale                     |
-| [docs/site/index.html](./site/index.html) | Visual architecture overview           |
+## Documentation
+
+| Doc                                  | Contents              |
+| ------------------------------------ | --------------------- |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Components, data flow |
+| [DATA-MODEL.md](./DATA-MODEL.md)     | Firestore schema      |
+| [SECURITY.md](./SECURITY.md)         | Auth and rules        |
+| [OPERATIONS.md](./OPERATIONS.md)     | Runbooks              |
+| [QUESTIONS.md](./QUESTIONS.md)       | Open items            |
+| [ADR.md](./ADR.md)                   | Decision records      |
 
 ## Acceptance checklist
 
-- [ ] `npm install` succeeds
-- [ ] Emulators start; seed completes
-- [ ] Console login works; overview shows metrics
-- [ ] Sync health, dead letters, identity, Betty coverage render
-- [ ] `npm run verify` passes
+- [ ] Clone repo, `npm install` succeeds
+- [ ] `npm run emulators` starts Firestore + Auth
+- [ ] `npm run seed:local` completes
+- [ ] Console at http://localhost:3100 — login works, overview shows metrics
+- [ ] Sync health, dead letters, identity, Betty coverage pages render
+- [ ] `npm run verify` and `npm run test:e2e` pass
 - [ ] Architecture docs reviewed
 
 ## Out of scope
 
-This submission does not include production GCP deployment, real PCC credentials, or RehabAlpha clinical UI integration. See [QUESTIONS.md](./QUESTIONS.md) for follow-up items.
+Production GCP deployment, real PCC credentials, and RehabAlpha clinical UI integration are not included. See [QUESTIONS.md](./QUESTIONS.md).
