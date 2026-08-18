@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RehabAlpha ↔ PCC Sync — Architecture</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --panel-hover: #334155;
+        --ink: #f1f5f9;
+        --muted: #94a3b8;
+        --accent: #2dd4bf;
+        --accent-dim: #0f766e;
+        --warn: #fbbf24;
+        --danger: #f87171;
+        --ok: #4ade80;
+        --line: #475569;
+        --font: 'Segoe UI', system-ui, sans-serif;
+        --mono: 'SF Mono', ui-monospace, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font);
+        background: radial-gradient(ellipse at top, #1e3a5f 0%, var(--bg) 55%);
+        color: var(--ink);
+        min-height: 100vh;
+      }
+
+      header {
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid var(--line);
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(8px);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 600;
+      }
+
+      header p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        gap: 1.5rem;
+        padding: 1.5rem 2rem 3rem;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      @media (max-width: 960px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .canvas {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1.5rem;
+        min-height: 520px;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .tab {
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        padding: 0.4rem 0.85rem;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 0.82rem;
+        transition: all 0.15s;
+      }
+
+      .tab:hover {
+        border-color: var(--accent);
+        color: var(--ink);
+      }
+
+      .tab.active {
+        background: var(--accent-dim);
+        border-color: var(--accent);
+        color: white;
+      }
+
+      .view {
+        display: none;
+      }
+
+      .view.active {
+        display: block;
+      }
+
+      /* Architecture diagram */
+      .diagram {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0;
+      }
+
+      .row {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        width: 100%;
+      }
+
+      .node {
+        background: #0f172a;
+        border: 2px solid var(--line);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        min-width: 130px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.18s;
+        position: relative;
+      }
+
+      .node:hover,
+      .node.selected {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 1px var(--accent),
+          0 8px 24px rgba(45, 212, 191, 0.12);
+        transform: translateY(-2px);
+      }
+
+      .node .label {
+        font-weight: 600;
+        font-size: 0.88rem;
+      }
+
+      .node .sub {
+        font-size: 0.72rem;
+        color: var(--muted);
+        margin-top: 0.25rem;
+      }
+
+      .node.external {
+        border-color: #6366f1;
+      }
+
+      .node.store {
+        border-color: var(--warn);
+      }
+
+      .node.ops {
+        border-color: var(--ok);
+      }
+
+      .arrow {
+        color: var(--muted);
+        font-size: 1.2rem;
+        line-height: 1;
+      }
+
+      .arrow-h {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .arrow-h::before,
+      .arrow-h::after {
+        content: '';
+        height: 1px;
+        background: var(--line);
+        flex: 1;
+      }
+
+      /* Betty timeline */
+      .timeline {
+        position: relative;
+        padding-left: 1.5rem;
+      }
+
+      .timeline::before {
+        content: '';
+        position: absolute;
+        left: 0.4rem;
+        top: 0.5rem;
+        bottom: 0.5rem;
+        width: 2px;
+        background: var(--line);
+      }
+
+      .event {
+        position: relative;
+        margin-bottom: 1.25rem;
+        padding: 0.85rem 1rem;
+        background: #0f172a;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+
+      .event:hover,
+      .event.selected {
+        border-color: var(--accent);
+      }
+
+      .event::before {
+        content: '';
+        position: absolute;
+        left: -1.35rem;
+        top: 1.1rem;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--panel);
+      }
+
+      .event time {
+        font-size: 0.72rem;
+        color: var(--accent);
+        font-family: var(--mono);
+      }
+
+      .event h3 {
+        margin: 0.25rem 0;
+        font-size: 0.95rem;
+      }
+
+      .event p {
+        margin: 0;
+        font-size: 0.82rem;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      /* Sidebar detail */
+      .detail {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1.25rem;
+        position: sticky;
+        top: 5.5rem;
+        max-height: calc(100vh - 7rem);
+        overflow-y: auto;
+      }
+
+      .detail h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1.05rem;
+        color: var(--accent);
+      }
+
+      .detail .tag {
+        display: inline-block;
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        background: var(--accent-dim);
+        color: white;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        margin-bottom: 0.75rem;
+      }
+
+      .detail p,
+      .detail li {
+        font-size: 0.85rem;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      .detail ul {
+        padding-left: 1.1rem;
+        margin: 0.5rem 0;
+      }
+
+      .detail code {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        background: #0f172a;
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+        color: var(--warn);
+      }
+
+      .links {
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+      }
+
+      .links a {
+        display: block;
+        color: var(--accent);
+        font-size: 0.82rem;
+        text-decoration: none;
+        margin-bottom: 0.35rem;
+      }
+
+      .links a:hover {
+        text-decoration: underline;
+      }
+
+      footer {
+        text-align: center;
+        padding: 1rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+        border-top: 1px solid var(--line);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>RehabAlpha ↔ PointClickCare Sync</h1>
+      <p>Interactive architecture — click any component or Betty timeline event for details</p>
+    </header>
+
+    <main>
+      <section class="canvas">
+        <div class="tabs">
+          <button class="tab active" data-view="architecture">System flow</button>
+          <button class="tab" data-view="betty">Betty scenario</button>
+          <button class="tab" data-view="policies">Core policies</button>
+        </div>
+
+        <div id="architecture" class="view active">
+          <div class="diagram">
+            <div class="row">
+              <div class="node external" data-id="pcc">
+                <div class="label">PointClickCare</div>
+                <div class="sub">Webhooks + REST API</div>
+              </div>
+            </div>
+            <div class="arrow">↓ HTTPS</div>
+            <div class="row">
+              <div class="node" data-id="webhook">
+                <div class="label">pccWebhook</div>
+                <div class="sub">ack &lt; 3s · dedupe</div>
+              </div>
+            </div>
+            <div class="arrow">↓ enqueue</div>
+            <div class="row">
+              <div class="node" data-id="tasks">
+                <div class="label">Cloud Tasks</div>
+                <div class="sub">backoff · dedupe key</div>
+              </div>
+            </div>
+            <div class="arrow">↓ POST</div>
+            <div class="row">
+              <div class="node" data-id="worker">
+                <div class="label">syncWorker</div>
+                <div class="sub">re-fetch · transform</div>
+              </div>
+            </div>
+            <div class="arrow-h">writes Admin SDK</div>
+            <div class="row">
+              <div class="node store" data-id="firestore">
+                <div class="label">Firestore</div>
+                <div class="sub">patients · coverage · sync</div>
+              </div>
+              <div class="node store" data-id="secrets">
+                <div class="label">Secret Manager</div>
+                <div class="sub">OAuth tokens</div>
+              </div>
+              <div class="node store" data-id="audit">
+                <div class="label">Audit log</div>
+                <div class="sub">append-only</div>
+              </div>
+            </div>
+            <div class="arrow-h">read-only rules</div>
+            <div class="row">
+              <div class="node ops" data-id="rehabalpha">
+                <div class="label">RehabAlpha App</div>
+                <div class="sub">clinical UI</div>
+              </div>
+              <div class="node ops" data-id="ops">
+                <div class="label">Ops Console</div>
+                <div class="sub">DLQ · sync health</div>
+              </div>
+            </div>
+            <div class="arrow-h">scheduled · independent</div>
+            <div class="row">
+              <div class="node" data-id="reconcile">
+                <div class="label">Reconciliation</div>
+                <div class="sub">delta 15m · census nightly</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="betty" class="view">
+          <div class="timeline">
+            <div class="event" data-id="betty-admit">
+              <time>2026-08-01</time>
+              <h3>Admitted to Ferncrest</h3>
+              <p>PCC webhook → sync creates patient, admission, Medicare primary coverage.</p>
+            </div>
+            <div class="event" data-id="betty-loa">
+              <time>2026-08-12 → 2026-08-14</time>
+              <h3>Leave of absence (hospital)</h3>
+              <p>ADT updates reconstruct one continuous stay — not discharge + readmit.</p>
+            </div>
+            <div class="event" data-id="betty-payer">
+              <time>2026-09-15 → 2026-09-16</time>
+              <h3>Medicare → Medicaid transition</h3>
+              <p>Both coverage rows kept with effective dates — bitemporal timeline.</p>
+            </div>
+            <div class="event" data-id="betty-lakeside">
+              <time>Later at Lakeside</time>
+              <h3>Second facility, new MRN</h3>
+              <p>PCC org master patient links to same <code>person</code> automatically.</p>
+            </div>
+            <div class="event" data-id="betty-harold">
+              <time>Counter-example</time>
+              <h3>Harold at same facility</h3>
+              <p>Similar demographics do NOT auto-merge — separate person records.</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="policies" class="view">
+          <div class="timeline">
+            <div class="event" data-id="policy-watermark">
+              <time>Sync policy</time>
+              <h3>Watermark</h3>
+              <p>
+                Out-of-order webhooks safe — compare upstream modification instant + content hash.
+              </p>
+            </div>
+            <div class="event" data-id="policy-coverage">
+              <time>Coverage policy</time>
+              <h3>Never delete payers</h3>
+              <p>Close with end date; supersede corrections; flag inferred closures.</p>
+            </div>
+            <div class="event" data-id="policy-identity">
+              <time>Identity policy</time>
+              <h3>No fuzzy auto-merge</h3>
+              <p>Authoritative PCC link or exact MRN only; else human review queue.</p>
+            </div>
+            <div class="event" data-id="policy-security">
+              <time>Security policy</time>
+              <h3>Deny client writes</h3>
+              <p>All mutations via Admin SDK; integrationOperator cannot read full chart.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="detail" id="detail">
+        <span class="tag">Overview</span>
+        <h2>Select a component</h2>
+        <p>
+          Click nodes in the system diagram, or events in the Betty / policies timelines, to see
+          design rationale and code references.
+        </p>
+        <div class="links">
+          <a href="../ARCHITECTURE.md">ARCHITECTURE.md</a>
+          <a href="../DATA-MODEL.md">DATA-MODEL.md</a>
+          <a href="../SECURITY.md">SECURITY.md</a>
+          <a href="../ADR.md">ADR.md</a>
+        </div>
+      </aside>
+    </main>
+
+    <footer>RehabAlpha PCC Sync — reference implementation · GitHub Pages</footer>
+
+    <script>
+      const DETAILS = {
+        pcc: {
+          tag: 'External',
+          title: 'PointClickCare',
+          body: `<p>System of record for SNF/LTC: demographics, ADT, coverage. Sends webhooks (at-least-once, unordered) and exposes REST API for reconciliation.</p>
+          <ul><li>2-legged + 3-legged OAuth</li><li>Rate limits — token bucket client</li><li><code>PCC_TRANSPORT=fixture</code> in dev</li></ul>`,
+        },
+        webhook: {
+          tag: 'Cloud Function',
+          title: 'pccWebhook',
+          body: `<p>Must respond in seconds. Validates shared secret, resolves tenant via <code>pccConnections</code>, dedupes on <code>messageId</code>, enqueues Cloud Task, returns 200.</p>
+          <p>Does <strong>not</strong> trust webhook body for chart data — worker re-fetches.</p>`,
+        },
+        tasks: {
+          tag: 'Queue',
+          title: 'Cloud Tasks',
+          body: `<p>Decouples ack from work. Supports delayed retry with exponential backoff. Dedupe by task name prevents webhook redelivery storms.</p>
+          <p>Emulator uses <code>InlineTaskQueue</code> — no local Cloud Tasks emulator exists.</p>`,
+        },
+        worker: {
+          tag: 'Cloud Function',
+          title: 'syncWorker',
+          body: `<p>Executes <code>SyncTask</code>: check contract → bind PCC client → fetch upstream → apply watermark → write Firestore → audit.</p>
+          <ul><li>Retryable → reschedule</li><li>Permanent → dead letter</li></ul>`,
+        },
+        firestore: {
+          tag: 'Data store',
+          title: 'Firestore',
+          body: `<p>Flat collections + <code>therapyOrgId</code>. Client read-only. Chart projections: patients, admissions, coverages, persons.</p>
+          <p>Sync ops: events, cursors, dead letters, drift records.</p>`,
+        },
+        secrets: {
+          tag: 'Secrets',
+          title: 'Secret Manager',
+          body: `<p>OAuth client secret and per-connection refresh tokens. Referenced by name in <code>pccConnections</code> — never stored in Firestore.</p>`,
+        },
+        audit: {
+          tag: 'Compliance',
+          title: 'Audit log',
+          body: `<p>Append-only <code>auditEvents</code>. Integration mutations and user access. Detail objects use field names — not PHI values.</p>`,
+        },
+        rehabalpha: {
+          tag: 'Product',
+          title: 'RehabAlpha clinical app',
+          body: `<p>Therapists document care. PCC-owned fields read from Firestore; clinical fields owned by RehabAlpha — field ownership policy prevents overwrite.</p>`,
+        },
+        ops: {
+          tag: 'Operations',
+          title: 'Ops console',
+          body: `<p>Next.js server app. Routes: sync health, dead letters (replay), identity review, sanitized coverage timeline.</p>
+          <p><code>integrationOperator</code> role — no full chart read.</p>`,
+        },
+        reconcile: {
+          tag: 'Safety net',
+          title: 'Reconciliation',
+          body: `<p><strong>Delta</strong> (15 min): pull modified since cursor with overlap.</p>
+          <p><strong>Census</strong> (nightly): compare ID sets — catches missed webhooks entirely.</p>`,
+        },
+        'betty-admit': {
+          tag: 'Scenario',
+          title: 'Betty admitted',
+          body: `<p>Initial sync at Ferncrest creates facility-scoped patient projection + person + Medicare coverage.</p>`,
+        },
+        'betty-loa': {
+          tag: 'Scenario',
+          title: 'Leave of absence',
+          body: `<p>Hospital stay mid-admission modelled as one admission with location change on return — caseload stays correct.</p>`,
+        },
+        'betty-payer': {
+          tag: 'Scenario',
+          title: 'Payer transition',
+          body: `<p>Part A ends 15 Sep, Medicaid starts 16 Sep. Both rows in <code>coverages</code> — answers "what was billable in August?"</p>`,
+        },
+        'betty-lakeside': {
+          tag: 'Scenario',
+          title: 'Cross-facility identity',
+          body: `<p>PCC organisation master patient is authoritative — auto-link at Lakeside without fuzzy scoring.</p>`,
+        },
+        'betty-harold': {
+          tag: 'Scenario',
+          title: 'Harold — no false merge',
+          body: `<p>Two residents at Ferncrest → two <code>persons</code>. Identity review queue for ambiguous cases only.</p>`,
+        },
+        'policy-watermark': {
+          tag: 'Policy',
+          title: 'Watermark policy',
+          body: `<p>ADR-003. Makes duplicate and late webhooks idempotent without global ordering. Property-tested in <code>@rehabalpha/core</code>.</p>`,
+        },
+        'policy-coverage': {
+          tag: 'Policy',
+          title: 'Bitemporal coverage',
+          body: `<p>ADR-002. Effective dates (real world) vs recorded dates (system belief). Never hard-delete payer rows.</p>`,
+        },
+        'policy-identity': {
+          tag: 'Policy',
+          title: 'Identity policy',
+          body: `<p>ADR-004. Jaro-Winkler scoring for review queue only. Wrong merge = serious incident — automation bias rejected.</p>`,
+        },
+        'policy-security': {
+          tag: 'Policy',
+          title: 'Security model',
+          body: `<p>ADR-006, ADR-008. Deny client writes. Minimum necessary for operators. Rules tested against <code>ROLE_PERMISSIONS</code>.</p>`,
+        },
+      };
+
+      const detailEl = document.getElementById('detail');
+
+      function showDetail(id) {
+        const d = DETAILS[id];
+        if (!d) return;
+        detailEl.innerHTML = `
+          <span class="tag">${d.tag}</span>
+          <h2>${d.title}</h2>
+          ${d.body}
+          <div class="links">
+            <a href="../ARCHITECTURE.md">ARCHITECTURE.md</a>
+            <a href="../DATA-MODEL.md">DATA-MODEL.md</a>
+            <a href="../ADR.md">ADR.md</a>
+          </div>`;
+        document
+          .querySelectorAll('.node.selected, .event.selected')
+          .forEach((el) => el.classList.remove('selected'));
+        document
+          .querySelectorAll(`[data-id="${id}"]`)
+          .forEach((el) => el.classList.add('selected'));
+      }
+
+      document.querySelectorAll('.node, .event').forEach((el) => {
+        el.addEventListener('click', () => showDetail(el.dataset.id));
+      });
+
+      document.querySelectorAll('.tab').forEach((tab) => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+          document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
+          tab.classList.add('active');
+          document.getElementById(tab.dataset.view).classList.add('active');
+        });
+      });
+
+      showDetail('pcc');
+    </script>
+  </body>
+</html>
