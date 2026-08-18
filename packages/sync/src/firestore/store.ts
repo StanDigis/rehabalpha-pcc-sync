@@ -139,6 +139,23 @@ export class SyncStore {
     return readOne(this.pccConnections().doc(id));
   }
 
+  /** Resolves a PCC organisation uuid to this tenant's connection record. Used on every webhook. */
+  async findConnectionByPccOrg(pccOrgUuid: string): Promise<PccConnection | null> {
+    const snapshot = await this.pccConnections()
+      .where('pccOrgUuid', '==', pccOrgUuid)
+      .limit(1)
+      .get();
+
+    return snapshot.docs[0]?.data() ?? null;
+  }
+
+  /** Active facilities for a therapy organisation. Drives the scheduled reconciliation sweeps. */
+  async listFacilitiesForOrg(therapyOrgId: string): Promise<Facility[]> {
+    const snapshot = await this.facilities().where('therapyOrgId', '==', therapyOrgId).get();
+
+    return snapshot.docs.map((doc) => doc.data());
+  }
+
   /** Resolves a PCC organisation and facility pair to this tenant's facility record. */
   async findFacilityByPcc(
     therapyOrgId: string,

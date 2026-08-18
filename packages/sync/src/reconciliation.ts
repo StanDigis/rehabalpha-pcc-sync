@@ -209,6 +209,12 @@ export class Reconciler {
     input: ReconcileInput,
     runId: string,
   ): Promise<Partial<ReconciliationRun['counts']>> {
+    // Loaded up front so the write at the end of the sweep can be a whole cursor. Merging only
+    // `lastCensusRunAt` into a document that does not exist yet creates one with that single field,
+    // and the next read of it fails validation — a nightly census on a facility that has never had a
+    // delta pull is exactly that case.
+    const cursor = await this.loadCursor(input);
+
     const local = new Map<string, string | null>();
     const localSnapshot = await this.deps.store.db
       .collection(COLLECTIONS.patients)
@@ -272,7 +278,7 @@ export class Reconciler {
     await this.deps.store
       .syncCursors()
       .doc(this.cursorId(input))
-      .set({ lastCensusRunAt: this.deps.clock.now() }, { merge: true });
+      .set({ ...cursor, lastCensusRunAt: this.deps.clock.now() }, { merge: true });
 
     return { examined, drifted };
   }

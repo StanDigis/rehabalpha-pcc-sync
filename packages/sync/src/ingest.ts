@@ -34,9 +34,13 @@ const EVENT_RETENTION_DAYS = 90;
 function entityTypeFor(eventType: string): SyncEntityType | null {
   const normalised = eventType.toLowerCase();
 
+  // The specific signal is tested before the generic prefix, because PCC namespaces some events
+  // under the patient. `patient.payerChanged` matched on the prefix would schedule a demographics
+  // refresh and never re-read coverage, so the payer change that caused the notification would be
+  // the one thing the sync ignored.
+  if (normalised.includes('payer') || normalised.startsWith('coverage.')) return 'coverage';
+  if (normalised.includes('admission') || normalised.startsWith('adt.')) return 'admission';
   if (normalised.startsWith('patient.')) return 'patient';
-  if (normalised.startsWith('adt.') || normalised.includes('admission')) return 'admission';
-  if (normalised.startsWith('coverage.') || normalised.includes('payer')) return 'coverage';
 
   return null;
 }

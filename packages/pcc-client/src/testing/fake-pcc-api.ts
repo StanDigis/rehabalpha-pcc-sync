@@ -67,6 +67,19 @@ export class FakePccApi implements PccApi {
     this.calls.length = 0;
   }
 
+  /**
+   * Restores the fixture data, the call log and any programmed failures.
+   *
+   * A test that patches a patient or withdraws a coverage has mutated shared state, and without this
+   * the next test inherits it — the failure mode where a suite passes one test at a time and fails as
+   * a run, or worse, passes in the order it was written and breaks when a test is inserted above.
+   */
+  reset(): void {
+    Object.assign(this.data, createFixtureData());
+    this.calls.length = 0;
+    this.failures.clear();
+  }
+
   async listActivations(orgUuid: string): Promise<PccActivation[]> {
     this.record('listActivations', { orgUuid });
     return this.data.activations.filter((activation) => activation.orgUuid === orgUuid);

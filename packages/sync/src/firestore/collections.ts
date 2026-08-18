@@ -46,13 +46,20 @@ export const COLLECTIONS = {
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
 
 /**
- * Validates on read as well as on write.
+ * Validates on the way out of Firestore.
  *
- * Reading is where the value is, and it is the half usually skipped. A document written by an
- * older deploy, a half-finished migration or a well-meaning manual edit in the console is
- * otherwise trusted implicitly, and the failure surfaces somewhere far from the cause — a
- * `undefined is not an object` in a React component, say. Failing at the boundary names the
- * document and the field.
+ * Reading is the half usually skipped, and it is where the value is. A document written by an older
+ * deploy, a half-finished migration, a partial merge that left out a required field, or a
+ * well-meaning manual edit in the console is otherwise trusted implicitly, and the failure surfaces
+ * somewhere far from the cause — an `undefined is not an object` in a React component, say. Failing
+ * at the boundary names the document and the field instead.
+ *
+ * Writes are deliberately not validated here, and that is a limitation rather than an oversight:
+ * `set(…, { merge: true })` and `update()` both hand the converter a fragment, and a schema for the
+ * whole document rejects every fragment. Guarding writes would therefore mean either a second
+ * partial schema per collection or banning merges outright. The read check catches the same defects
+ * one step later, which the suites rely on — the census sweep writing an incomplete cursor was found
+ * exactly this way.
  */
 export function zodConverter<T extends Record<string, unknown>>(
   schema: z.ZodType<T>,

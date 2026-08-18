@@ -1,7 +1,7 @@
 import {
   backoffDelayMs,
   classifyFailure,
-  redact,
+  redactFreeText,
   type Clock,
   type Logger,
   type SyncDeadLetter,
@@ -11,6 +11,7 @@ import {
 import type { AuditLog } from './audit.js';
 import type { SyncEngine } from './engine/sync-engine.js';
 import type { SyncOutcome } from './engine/context.js';
+import { COLLECTIONS } from './firestore/collections.js';
 import type { SyncStore } from './firestore/store.js';
 import type { TaskQueue } from './task-queue.js';
 
@@ -95,18 +96,31 @@ export class SyncWorker {
     const applied = outcomes.some((outcome) => outcome.applied);
     const skipReason = outcomes.find((outcome) => !outcome.applied)?.decision;
 
-    await this.deps.store
-      .syncEvents()
-      .doc(task.causedByEventId)
-      .set(
-        {
-          status: applied ? 'applied' : 'skipped',
-          attempts: task.attempt,
-          completedAt: this.deps.clock.now(),
-          ...(applied ? {} : { skipReason: mapSkipReason(skipReason) }),
-        },
-        { merge: true },
-      );
+    await this.updateEvent(task.causedByEventId, {
+      status: applied ? 'applied' : 'skipped',
+      attempts: task.attempt,
+      completedAt: this.deps.clock.now(),
+      ...(applied ? {} : { skipReason: mapSkipReason(skipReason) }),
+    });
+  }
+
+  /**
+   * Updates the delivery record, tolerating its absence.
+   *
+   * `update` rather than a merging `set`, because the envelope has a ninety-day TTL and a replay
+   * requested after that window has no envelope to close out. A merging set would create a stub
+   * document holding a status and nothing else, which then fails validation the next time the
+   * console lists recent deliveries — a stale write turning into a broken screen.
+   */
+  private async updateEvent(eventId: string, fields: Record<string, unknown>): Promise<void> {
+    try {
+      await this.deps.store.db.collection(COLLECTIONS.syncEvents).doc(eventId).update(fields);
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+      this.deps.logger.info('Delivery record already expired; nothing to close out', {
+        correlationId: eventId,
+      });
+    }
   }
 
   private async deadLetter(
@@ -132,9 +146,10 @@ export class SyncWorker {
       failure: {
         kind: failure.kind,
         code: failure.code,
-        // Upstream errors occasionally echo request data back, so the message is redacted before it
-        // is stored in a collection that operators browse freely.
-        message: String((redact({ message: failure.message }) as { message: string }).message),
+        // Upstream errors occasionally echo request data back, so the message is scrubbed before it
+        // is stored in a collection that operators browse freely. Key-based redaction is no help
+        // here: the whole thing is one string, and the key is inside it.
+        message: redactFreeText(failure.message),
         attempts: task.attempt,
         firstFailedAt,
         lastFailedAt: now,
@@ -146,10 +161,11 @@ export class SyncWorker {
     await ref.set(record);
 
     if (task.causedByEventId !== null) {
-      await this.deps.store
-        .syncEvents()
-        .doc(task.causedByEventId)
-        .set({ status: 'deadLettered', attempts: task.attempt, completedAt: now }, { merge: true });
+      await this.updateEvent(task.causedByEventId, {
+        status: 'deadLettered',
+        attempts: task.attempt,
+        completedAt: now,
+      });
     }
 
     await this.deps.audit.record(
@@ -166,6 +182,16 @@ export class SyncWorker {
 
     return id;
   }
+}
+
+/** Firestore signals an update against a missing document with gRPC status 5. */
+function isNotFound(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code: unknown }).code === 5
+  );
 }
 
 function mapSkipReason(decision: string | undefined): SyncEvent['skipReason'] {

@@ -2,6 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
+    // The emulator suites live in `tests/`, outside the `rootDir` the build uses, so the check has
+    // to widen it. Nothing is emitted from this project, which is why relaxing it costs nothing.
+    "rootDir": ".",
     "types": ["node", "vitest/globals"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
