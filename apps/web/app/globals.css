@@ -2,16 +2,10 @@
 
 @theme {
   --color-surface: #f8fafc;
-  --color-panel: #ffffff;
   --color-ink: #0f172a;
-  --color-muted: #64748b;
-  --color-accent: #0f766e;
-  --color-accent-soft: #ccfbf1;
-  --color-danger: #b91c1c;
-  --color-warn: #b45309;
-  --color-ok: #15803d;
-  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --color-accent: #0d9488;
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', monospace;
 }
 
 @layer base {
@@ -23,6 +17,7 @@
 
   body {
     min-height: 100vh;
+    background: var(--color-surface);
   }
 
   a {

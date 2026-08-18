@@ -4,14 +4,14 @@ Runbooks for integration operators and on-call engineers. Assumes production dep
 
 ## Dashboards & entry points
 
-| Surface          | URL / entry                                         | Purpose                       |
-| ---------------- | --------------------------------------------------- | ----------------------------- |
-| Ops console      | `/sync-health`, `/dead-letters`, `/identity-review` | Day-to-day integration health |
-| Firebase console | Firestore, Functions logs                           | Deep debugging                |
-| Cloud Tasks      | `sync` queue                                        | Stuck / poison tasks          |
-| Audit log        | `auditEvents` collection                            | Who did what                  |
+| Surface          | URL / entry                                                         | Purpose                       |
+| ---------------- | ------------------------------------------------------------------- | ----------------------------- |
+| Ops console      | `/` (Overview), `/sync-health`, `/dead-letters`, `/identity-review` | Day-to-day integration health |
+| Firebase console | Firestore, Functions logs                                           | Deep debugging                |
+| Cloud Tasks      | `sync` queue                                                        | Stuck / poison tasks          |
+| Audit log        | `auditEvents` collection                                            | Who did what                  |
 
-Local demo: `npm run seed && npm run dev:web` → http://localhost:3100
+Local demo: see [CUSTOMER-GUIDE.md](./CUSTOMER-GUIDE.md) for full setup → http://localhost:3100
 
 ## Sync health (`/sync-health`)
 

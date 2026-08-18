@@ -149,3 +149,63 @@ export function formatAge(iso: string | null): string {
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
 }
+
+export type OpsOverview = {
+  tenantName: string;
+  cursorHealthy: number;
+  cursorDegraded: number;
+  cursorFailing: number;
+  deadLetters: number;
+  identityPending: number;
+  overallStatus: 'healthy' | 'attention' | 'critical';
+  headline: string;
+  recommendedStep: 'overview' | 'sync-health' | 'dead-letters' | 'identity-review';
+};
+
+export async function loadOpsOverview(therapyOrgId: string): Promise<OpsOverview> {
+  const store = getStore();
+  const [orgSnap, cursors, deadLetters, identity] = await Promise.all([
+    store.therapyOrgs().doc(therapyOrgId).get(),
+    listSyncHealth(therapyOrgId),
+    listOpenDeadLetters(therapyOrgId),
+    listPendingIdentityReviews(therapyOrgId),
+  ]);
+
+  const tenantName = orgSnap.data()?.displayName ?? therapyOrgId;
+  const cursorHealthy = cursors.filter((c) => c.status === 'healthy').length;
+  const cursorDegraded = cursors.filter((c) => c.status === 'degraded').length;
+  const cursorFailing = cursors.filter((c) => c.status === 'failing').length;
+
+  let overallStatus: OpsOverview['overallStatus'] = 'healthy';
+  let headline = 'No open issues.';
+  let recommendedStep: OpsOverview['recommendedStep'] = 'sync-health';
+
+  if (deadLetters.length > 0) {
+    overallStatus = 'critical';
+    headline = `${deadLetters.length} open dead letter${deadLetters.length === 1 ? '' : 's'}.`;
+    recommendedStep = 'dead-letters';
+  } else if (identity.length > 0 || cursorFailing > 0) {
+    overallStatus = 'attention';
+    headline =
+      identity.length > 0
+        ? `${identity.length} pending identity match${identity.length === 1 ? '' : 'es'}.`
+        : `${cursorFailing} failing cursor${cursorFailing === 1 ? '' : 's'}.`;
+    recommendedStep = identity.length > 0 ? 'identity-review' : 'sync-health';
+  } else if (cursorDegraded > 0) {
+    overallStatus = 'attention';
+    headline = `${cursorDegraded} stale cursor${cursorDegraded === 1 ? '' : 's'}.`;
+    recommendedStep = 'sync-health';
+  }
+
+  return {
+    tenantName,
+    cursorHealthy,
+    cursorDegraded,
+    cursorFailing,
+    deadLetters: deadLetters.length,
+    identityPending: identity.length,
+    overallStatus,
+    headline,
+    recommendedStep,
+  };
+}

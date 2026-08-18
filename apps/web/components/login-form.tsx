@@ -32,17 +32,17 @@ export function LoginForm() {
         throw new Error('session_failed');
       }
 
-      router.push('/sync-health');
+      router.push('/');
       router.refresh();
     } catch {
-      setError('Sign-in failed. Run `npm run seed` against the emulator first.');
+      setError('Sign-in failed. Run npm run seed:run against the emulator first.');
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className="mx-auto max-w-md space-y-4">
+    <form onSubmit={(event) => void submit(event)} className="space-y-4">
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-slate-700">
           Email

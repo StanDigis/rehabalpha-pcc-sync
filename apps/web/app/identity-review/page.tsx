@@ -1,8 +1,21 @@
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
-import { EmptyState, Mono, PageHeader, Panel, StatusBadge } from '@/components/ui';
+import {
+  BackLink,
+  DataTable,
+  EmptyState,
+  Mono,
+  PageHeader,
+  Panel,
+  StatusBadge,
+  TableHead,
+} from '@/components/ui';
 import { getSession, requirePermission } from '@/lib/auth';
-import { formatAge, listPendingIdentityReviews } from '@/lib/queries';
+import { formatAge, listPendingIdentityReviews, loadOpsOverview } from '@/lib/queries';
+
+function yesNo(value: boolean): string {
+  return value ? 'yes' : 'no';
+}
 
 export default async function IdentityReviewPage() {
   const session = await getSession();
@@ -14,65 +27,68 @@ export default async function IdentityReviewPage() {
     redirect('/login');
   }
 
-  const rows = await listPendingIdentityReviews(session.user.therapyOrgId);
+  const [rows, overview] = await Promise.all([
+    listPendingIdentityReviews(session.user.therapyOrgId),
+    loadOpsOverview(session.user.therapyOrgId),
+  ]);
 
   return (
-    <AppShell email={session.user.email}>
+    <AppShell
+      email={session.user.email}
+      tenantName={overview.tenantName}
+      roles={session.grant.roles}
+    >
       <PageHeader
         title="Identity review"
-        description="Probabilistic matches never auto-link. Reviewers see signal strength without opening full charts."
+        description="Pending person-match candidates. Fuzzy matches are never auto-linked."
+        actions={<BackLink />}
       />
 
-      <Panel>
+      <Panel title="Pending">
         {rows.length === 0 ? (
           <EmptyState
-            title="Nothing pending"
-            detail="No identity candidates awaiting a decision."
+            title="Queue empty"
+            detail="Candidates appear when sync finds similar demographics without an authoritative PCC link."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs tracking-wide text-slate-500 uppercase">
-                <tr>
-                  <th className="px-4 py-3">Patient</th>
-                  <th className="px-4 py-3">Candidate person</th>
-                  <th className="px-4 py-3">Score</th>
-                  <th className="px-4 py-3">Signals</th>
-                  <th className="px-4 py-3">Created</th>
+          <DataTable>
+            <TableHead>
+              <tr>
+                <th className="px-4 py-2">Patient</th>
+                <th className="px-4 py-2">Candidate</th>
+                <th className="px-4 py-2">Score</th>
+                <th className="px-4 py-2">Signals</th>
+                <th className="px-4 py-2">Created</th>
+              </tr>
+            </TableHead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((row) => (
+                <tr key={row.id} className="align-top">
+                  <td className="px-4 py-3">
+                    <Mono>{row.patientId}</Mono>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Mono>{row.candidatePersonId}</Mono>
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge tone={row.score >= 0.85 ? 'warn' : 'neutral'}>
+                      {(row.score * 100).toFixed(0)}%
+                    </StatusBadge>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    <ul className="space-y-0.5">
+                      <li>DOB: {yesNo(row.signals.birthDateMatches)}</li>
+                      <li>Last name: {yesNo(row.signals.lastNameMatches)}</li>
+                      <li>First name: {(row.signals.firstNameSimilarity * 100).toFixed(0)}%</li>
+                      <li>MRN: {yesNo(row.signals.medicalRecordNumberMatches)}</li>
+                      <li>Shared facility: {yesNo(row.signals.sharesFacility)}</li>
+                    </ul>
+                  </td>
+                  <td className="px-4 py-3">{formatAge(row.createdAt)}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map((row) => (
-                  <tr key={row.id} className="align-top hover:bg-slate-50/80">
-                    <td className="px-4 py-3">
-                      <Mono>{row.patientId}</Mono>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Mono>{row.candidatePersonId}</Mono>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge tone={row.score >= 0.85 ? 'warn' : 'neutral'}>
-                        {(row.score * 100).toFixed(0)}%
-                      </StatusBadge>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">
-                      <ul className="space-y-1">
-                        <li>DOB: {row.signals.birthDateMatches ? 'match' : 'no'}</li>
-                        <li>Last name: {row.signals.lastNameMatches ? 'match' : 'no'}</li>
-                        <li>
-                          First name similarity:{' '}
-                          {(row.signals.firstNameSimilarity * 100).toFixed(0)}%
-                        </li>
-                        <li>MRN: {row.signals.medicalRecordNumberMatches ? 'match' : 'no'}</li>
-                        <li>Shared facility: {row.signals.sharesFacility ? 'yes' : 'no'}</li>
-                      </ul>
-                    </td>
-                    <td className="px-4 py-3">{formatAge(row.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </Panel>
     </AppShell>

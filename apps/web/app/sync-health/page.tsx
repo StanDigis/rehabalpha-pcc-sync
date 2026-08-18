@@ -1,9 +1,17 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
-import { EmptyState, Mono, PageHeader, Panel, StatusBadge } from '@/components/ui';
+import {
+  BackLink,
+  DataTable,
+  EmptyState,
+  Mono,
+  PageHeader,
+  Panel,
+  StatusBadge,
+  TableHead,
+} from '@/components/ui';
 import { getSession, requirePermission } from '@/lib/auth';
-import { formatAge, listSyncHealth } from '@/lib/queries';
+import { formatAge, listSyncHealth, loadOpsOverview } from '@/lib/queries';
 
 function cursorTone(status: 'healthy' | 'degraded' | 'failing'): 'ok' | 'warn' | 'danger' {
   if (status === 'healthy') return 'ok';
@@ -21,67 +29,65 @@ export default async function SyncHealthPage() {
     redirect('/login');
   }
 
-  const rows = await listSyncHealth(session.user.therapyOrgId);
+  const [rows, overview] = await Promise.all([
+    listSyncHealth(session.user.therapyOrgId),
+    loadOpsOverview(session.user.therapyOrgId),
+  ]);
 
   return (
-    <AppShell email={session.user.email}>
+    <AppShell
+      email={session.user.email}
+      tenantName={overview.tenantName}
+      roles={session.grant.roles}
+    >
       <PageHeader
         title="Sync health"
-        description="Per-facility reconciliation cursors. A stale delta cursor usually means missed webhooks; census catches records never delivered."
+        description="Reconciliation cursors per facility and entity type."
+        actions={<BackLink />}
       />
 
-      <Panel>
+      <Panel title="Facility cursors">
         {rows.length === 0 ? (
           <EmptyState
-            title="No cursors yet"
-            detail="Run reconciliation or seed demo data to populate facility sync state."
+            title="No cursors"
+            detail="Run seed against the emulator or wait for the first reconciliation sweep."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs tracking-wide text-slate-500 uppercase">
-                <tr>
-                  <th className="px-4 py-3">Facility</th>
-                  <th className="px-4 py-3">Entity</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Delta cursor</th>
-                  <th className="px-4 py-3">Last success</th>
-                  <th className="px-4 py-3">Failures</th>
+          <DataTable>
+            <TableHead>
+              <tr>
+                <th className="px-4 py-2">Facility</th>
+                <th className="px-4 py-2">Entity</th>
+                <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Delta cursor</th>
+                <th className="px-4 py-2">Last success</th>
+                <th className="px-4 py-2">Failures</th>
+              </tr>
+            </TableHead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-slate-900">{row.facilityName}</p>
+                    <Mono>{row.facilityId}</Mono>
+                  </td>
+                  <td className="px-4 py-3 capitalize">{row.entityType}</td>
+                  <td className="px-4 py-3">
+                    <StatusBadge tone={cursorTone(row.status)}>{row.status}</StatusBadge>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {row.deltaCursor === null ? '—' : formatAge(row.deltaCursor)}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {row.lastSuccessAt === null ? '—' : formatAge(row.lastSuccessAt)}
+                  </td>
+                  <td className="px-4 py-3">{row.consecutiveFailures}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-900">{row.facilityName}</p>
-                      <Mono>{row.facilityId}</Mono>
-                    </td>
-                    <td className="px-4 py-3 capitalize">{row.entityType}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge tone={cursorTone(row.status)}>{row.status}</StatusBadge>
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.deltaCursor === null ? '—' : formatAge(row.deltaCursor)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.lastSuccessAt === null ? '—' : formatAge(row.lastSuccessAt)}
-                    </td>
-                    <td className="px-4 py-3">{row.consecutiveFailures}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </Panel>
-
-      <p className="mt-6 text-sm text-slate-500">
-        Coverage timelines for troubleshooting payer drift:{' '}
-        <Link href="/patients/demo-betty/coverage" className="font-medium text-teal-700 underline">
-          open sanitized Betty timeline
-        </Link>
-        .
-      </p>
     </AppShell>
   );
 }

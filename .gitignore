@@ -35,3 +35,7 @@ service-account*.json
 .DS_Store
 .idea/
 *.swp
+
+# IDE / agent artifacts (not part of the deliverable)
+apps/web/AGENTS.md
+apps/web/CLAUDE.md
