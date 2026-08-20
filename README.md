@@ -3,6 +3,7 @@
 Reference implementation: sync patient demographics, admissions, and coverage from **PointClickCare (PCC)** into **RehabAlpha** for contract therapy organisations.
 
 **Handover:** [docs/CUSTOMER-GUIDE.md](docs/CUSTOMER-GUIDE.md)  
+**Business scenarios (start here for product review):** [docs/BUSINESS-SCENARIOS.md](docs/BUSINESS-SCENARIOS.md)  
 **Architecture diagram:** https://standigis.github.io/rehabalpha-pcc-sync/site/
 
 ## Quick start
@@ -29,15 +30,18 @@ npm run test:e2e
 
 ## Documentation
 
-| Document                                    | Contents                                   |
-| ------------------------------------------- | ------------------------------------------ |
-| [CUSTOMER-GUIDE.md](docs/CUSTOMER-GUIDE.md) | Setup, console usage, acceptance checklist |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md)     | Components, data flow, failure modes       |
-| [OPERATIONS.md](docs/OPERATIONS.md)         | Operator runbooks                          |
-| [DATA-MODEL.md](docs/DATA-MODEL.md)         | Firestore schema                           |
-| [SECURITY.md](docs/SECURITY.md)             | Auth, grants, rules                        |
-| [QUESTIONS.md](docs/QUESTIONS.md)           | Open items for PCC / product               |
-| [ADR.md](docs/ADR.md)                       | Architecture decisions                     |
+| Document                                            | Contents                                   |
+| --------------------------------------------------- | ------------------------------------------ |
+| [CUSTOMER-GUIDE.md](docs/CUSTOMER-GUIDE.md)         | Setup, console usage, acceptance checklist |
+| [BUSINESS-SCENARIOS.md](docs/BUSINESS-SCENARIOS.md) | Real-world scenarios (product review)      |
+| [CUTOVER.md](docs/CUTOVER.md)                       | Day-one rollout with existing charts       |
+| [DATA-MAPPING.md](docs/DATA-MAPPING.md)             | PCC → RehabAlpha field mapping             |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md)             | Components, data flow, failure modes       |
+| [OPERATIONS.md](docs/OPERATIONS.md)                 | Operator runbooks                          |
+| [DATA-MODEL.md](docs/DATA-MODEL.md)                 | Firestore schema                           |
+| [SECURITY.md](docs/SECURITY.md)                     | Auth, grants, rules                        |
+| [QUESTIONS.md](docs/QUESTIONS.md)                   | Open items for PCC / product               |
+| [ADR.md](docs/ADR.md)                               | Architecture decisions                     |
 
 ## Repository layout
 
